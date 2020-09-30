@@ -1,0 +1,113 @@
+﻿@page "/"
+@using BlazorApp.Shared.Models
+@using BlazorApp.Shared.BLL
+@inject IPasswordStrengthValidator passwordStrengthValidator
+@inject HttpClient Http
+
+<h1>Registration</h1>
+
+Please enter information below to register.
+
+<EditForm Model="@userData" OnValidSubmit="OnValidSubmit">
+    <DataAnnotationsValidator />
+    <CustomValidator @ref="customValidator" />
+    <ValidationSummary />
+    <p>
+        <label for="Email">Email</label><br />
+        <InputText id="Email" placeholder="Enter email address" @bind-Value="@userData.Email" />
+    </p>
+    <p>
+        <label for="Password">Password</label><br />
+        <InputText id="Password" type="password" placeholder="Enter password" @bind-Value="@userData.Password" />
+    </p>
+    <p>
+        <label for="gdpr">Agree with terms</label><br />
+        <InputCheckbox @bind-Value="@userData.GdprAgreement" />
+    </p>    
+    <p>
+        <button type="submit">Submit</button>
+    </p>
+</EditForm>
+
+@if (submitResultAlert == true)
+{
+<div id="sendalert" class="alert @alertinfo mt-2">
+    <span class="@alerttextclass">@alerttext</span>
+</div>
+}
+
+@code {
+    private CustomValidator customValidator;
+    private bool submitResultAlert { get; set; } = false;
+    private bool gdprAgreement { get; set; } = false;
+    private string alertinfo { get; set; }
+    private string alerttextclass { get; set; }
+    private string alerttext { get; set; }
+    private AddUserRequest userData = new AddUserRequest();
+
+    private async Task OnValidSubmit()
+    {
+        customValidator.ClearErrors();
+        var errors = new Dictionary<string, List<string>>();
+
+        if (!passwordStrengthValidator.IsStrongPassword(userData.Password))
+        {
+            errors.Add(nameof(userData.Password),
+                new List<string>() { "Please use a stronger password, " +
+                "e.g. a mix of upper and lower case, special characters, and numbers." });
+        }
+
+        if (!userData.GdprAgreement)
+        {
+            errors.Add(nameof(userData.GdprAgreement),
+                new List<string>() { "Please accept terms." });
+        }
+
+        if (errors.Count() > 0)
+        {
+            customValidator.DisplayErrors(errors);
+        }
+        else
+        {
+            var results = await SubmitForm();
+            ShowAlert(results);
+            if (results.Success)
+            {
+                userData.Password = string.Empty;
+                userData.Email = string.Empty;
+                userData.GdprAgreement = false;
+            }
+        }
+    }
+
+    private async Task<PostResponse> SubmitForm()
+    {
+        try
+        {
+            var response = await Http.PostAsJsonAsync("UserData", userData);
+            var resultContent = response.Content.ReadFromJsonAsync<PostResponse>();
+            return resultContent.Result;
+        }
+        catch(Exception exception)
+        {
+            return new PostResponse { Success = false, Message = $"There was a problem submitting the form.\n\r{exception.Message}" };
+        }
+    }
+
+    private void ShowAlert(PostResponse response)
+    {
+        submitResultAlert = true;
+        if (!response.Success)
+        {
+            alertinfo = "alert-danger";
+            alerttextclass = "text-danger";
+        }
+        else
+        {
+            alertinfo = "alert-success";
+            alerttextclass = "text-success";
+        }
+
+        alerttext = response.Message;
+    }
+}
